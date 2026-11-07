@@ -1,0 +1,9 @@
+streamlit>=1.41
+yfinance
+pandas
+numpy
+scipy
+statsmodels
+matplotlib
+requests
+numba
