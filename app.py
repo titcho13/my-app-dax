@@ -4,7 +4,7 @@
 # ----------------------------------------------------------------------------
 # Déploiement : GitHub + Streamlit Cloud (gratuit).
 # Secrets Streamlit Cloud (app → Settings → Secrets) :
-#   CODE_ACCES = "votre-code"
+#   CODE_ACCES = "sam"
 #   TELEGRAM_TOKEN = "..."
 #   TELEGRAM_CHAT_ID = "..."
 #   EMAIL_SMTP / EMAIL_PORT / EMAIL_USER / EMAIL_PASS / EMAIL_DEST (optionnel)
