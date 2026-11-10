@@ -1,65 +1,63 @@
 name: DAX live
 
 on:
-  schedule:
-    - cron: "55 6 * * 1-5"
-    - cron: "55 12 * * 1-5"
   workflow_dispatch:
-
-concurrency:
-  group: dax-live-${{ github.event.schedule }}
-  cancel-in-progress: false
+  schedule:
+    # Heures en UTC. HIVER (CET = UTC+1) : valeurs ci-dessous.
+    # ÉTÉ (CEST = UTC+2) : remplace 55 7 → 55 6 et 55 11 → 55 10.
+    - cron: "55 7 * * 1-5"    # matin : démarre vers 08:55 Paris
+    - cron: "55 11 * * 1-5"   # après-midi : démarre vers 12:55 Paris
 
 permissions:
-  contents: write
+  contents: write              # nécessaire pour commiter etat/etat_live.json
+
+concurrency:
+  group: dax-live              # jamais deux jobs en même temps
+  cancel-in-progress: false
 
 jobs:
   live:
-    runs-on: ubuntu-latest
-    timeout-minutes: 360
-
+    runs-on: ubuntu-24.04
+    timeout-minutes: 330
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Vérification dépôt
-        run: |
-          pwd
-          ls -la
-          find . -name "*.py"
+        uses: actions/checkout@v5
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.11"
+          cache: pip
 
       - name: Installer dépendances
-        run: |
-          python -m pip install --upgrade pip
-          pip install yfinance statsmodels scipy requests numba matplotlib pandas numpy
+        run: pip install -r requirements.txt
 
       - name: Vérifier dax_core
         run: |
-          python -c "import os; print(os.listdir('.'))"
-          python -c "import os; print('dax_core.py existe =', os.path.exists('dax_core.py'))"
+          test -f dax_core.py
+          python -c "import sys; sys.path.insert(0,'.'); import dax_core; print('dax_core OK')"
 
       - name: Boucle live
+        # Le job du matin est coupé après 4 h (≈ 12:55 Paris) ; celui de
+        # l'après-midi s'arrête seul à 17:30 grâce au script.
+        timeout-minutes: 240
+        continue-on-error: true
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          TZ: Europe/Paris
-        run: |
-          python dax_live.py
+          PYTHONUNBUFFERED: "1"
+        run: python dax_live.py
 
       - name: Sauver état
         if: always()
         run: |
-          git config user.name "github-actions[bot]"
+          git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add etat/etat_live.json || true
-          git commit -m "etat live" || true
-          git push || true]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add etat/etat_live.json || true
-          git commit -m "etat live $(date -u +%Y-%m-%dT%H:%M)" || echo "rien à committer"
-          git push || echo "push impossible (rien de nouveau)"
+          if [ -f etat/etat_live.json ]; then
+            git add etat/etat_live.json
+            if ! git diff --cached --quiet; then
+              git commit -m "maj état live [skip ci]"
+              git pull --rebase origin main
+              git push
+            fi
+          fi
