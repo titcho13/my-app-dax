@@ -111,8 +111,20 @@ def verifier_alerte(d, etat):
 def boucle_live():
     import pandas as pd
     # dax_core.py = vos CELLULES 1 à 11b (sans Colab)
-    from dax_core import (PARAMS, charger_donnees, detecter_anomalies,
-                          calibrer_et_appliquer)
+import sys
+import os
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+if BASE_DIR not in sys.path:
+    sys.path.insert(0, BASE_DIR)
+
+from dax_core import (
+    PARAMS,
+    charger_donnees,
+    detecter_anomalies,
+    calibrer_et_appliquer
+)
 
     etat = charger_etat()
     d = None; derniere_barre = None
