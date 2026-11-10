@@ -117,7 +117,10 @@ def boucle_live():
     jour_calib = etat.get("jour_calib")
     print(f"▶ Démarrage {PARAMS['symbole']} {PARAMS['intervalle']} à "
           f"{maintenant_paris():%H:%M:%S} Paris | alertes Telegram : proba >= {SEUIL_PROBA}%")
- envoyer_telegram("✅ Test dax_live depuis GitHub Actions")
+
+    # TEST TEMPORAIRE : à supprimer une fois le message reçu sur Telegram
+    envoyer_telegram("✅ Test dax_live depuis GitHub Actions")
+
     while True:
         tl = maintenant_paris()
         if apres_cloture():
