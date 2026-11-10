@@ -118,8 +118,7 @@ def boucle_live():
     print(f"▶ Démarrage {PARAMS['symbole']} {PARAMS['intervalle']} à "
           f"{maintenant_paris():%H:%M:%S} Paris | alertes Telegram : proba >= {SEUIL_PROBA}%")
 
-    # TEST TEMPORAIRE : à supprimer une fois le message reçu sur Telegram
-    envoyer_telegram("✅ Test dax_live depuis GitHub Actions")
+
 
     while True:
         tl = maintenant_paris()
