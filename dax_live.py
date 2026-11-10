@@ -23,6 +23,12 @@ HEURE_FIN   = 17.5       # 17:30 Paris
 SEUIL_PROBA = 90         # alerte si probabilité directionnelle >= 90 %
 FICHIER_ETAT = os.path.join(BASE_DIR, "etat", "etat_live.json")
 
+# --- Filtre jour / heure (heures de Paris, lundi=0 ... vendredi=4) -----------
+JOURS_AUTORISES   = {"LONG": {1, 2},      "SHORT": {2, 3, 4}}   # mar-mer | mer-jeu-ven
+HEURES_FAVORABLES = {"LONG": {12, 13, 14}, "SHORT": {9, 14, 15}}
+HEURES_INTERDITES = {"LONG": {8},          "SHORT": set()}
+HEURES_STRICTES   = False   # True = bloquer aussi les signaux hors créneaux favorables
+
 
 def _secret(nom):
     return os.environ.get(nom) or ""
@@ -86,13 +92,41 @@ def lire_proba(txt):
     return int(m.group(1)) if m else None
 
 
-def construire_message(l, ts, pct):
+def lire_sens(txt):
+    """'LONG 90%' -> 'LONG' ; 'SHORT 92%' -> 'SHORT' ; sinon None."""
+    if not txt or not isinstance(txt, str):
+        return None
+    t = txt.upper()
+    if "LONG" in t:
+        return "LONG"
+    if "SHORT" in t:
+        return "SHORT"
+    return None
+
+
+def filtre_jour_heure(sens, ts):
+    """Retourne (autorise, libelle). Direction inconnue : pas de filtre."""
+    if sens is None:
+        return True, "direction inconnue (non filtré)"
+    if ts.weekday() not in JOURS_AUTORISES[sens]:
+        return False, "jour non autorisé"
+    h = ts.hour
+    if h in HEURES_INTERDITES[sens]:
+        return False, "heure interdite"
+    favorable = h in HEURES_FAVORABLES[sens]
+    if HEURES_STRICTES and not favorable:
+        return False, "hors créneaux favorables"
+    return True, "favorable ✅" if favorable else "hors créneau favorable"
+
+
+def construire_message(l, ts, pct, creneau="—"):
     mom = f"{l['score_momentum']:.1f} ({l['momentum']})" if l.get("momentum") else "—"
     return (f"🎯 SIGNAL {l.get('signal_tendance', '—')} — probabilité {pct}%\n"
             f"{l.get('signal_prioritaire') or '—'}\n"
             f"{ts:%A %d/%m %H:%M} (Paris) | clôture {l['close']:.2f}\n"
             f"Momentum : {mom} | {l.get('confirmation_zscore', '—')}\n"
-            f"Anomalies : {l.get('type_anomalie', '—')} | régime {l.get('regime', '—')}")
+            f"Anomalies : {l.get('type_anomalie', '—')} | régime {l.get('regime', '—')}\n"
+            f"Créneau : {creneau}")
 
 
 def barres_a_alerter(d, etat):
@@ -142,11 +176,18 @@ def boucle_live():
                         l = d.loc[ts]
                         if getattr(l, "ndim", 1) > 1:      # index dupliqué
                             l = l.iloc[-1]
-                        pct = lire_proba(l.get("probabilite_directionnelle", ""))
-                        if pct is not None and pct >= SEUIL_PROBA:
-                            msg = construire_message(l, ts, pct)
-                            print(f"💬 {msg}")
-                            envoyer_telegram(msg)
+                        txt = l.get("probabilite_directionnelle", "")
+                        pct = lire_proba(txt)
+                        if pct is None or pct < SEUIL_PROBA:
+                            continue
+                        sens = lire_sens(txt)
+                        ok, creneau = filtre_jour_heure(sens, ts)
+                        if not ok:
+                            print(f"⛔ {ts:%a %H:%M} {sens} {pct}% filtré : {creneau}")
+                            continue
+                        msg = construire_message(l, ts, pct, creneau)
+                        print(f"💬 {msg}")
+                        envoyer_telegram(msg)
 
                 etat["derniere_barre_alertee"] = str(d.index[-1])
                 etat["jour_calib"] = jour_calib
