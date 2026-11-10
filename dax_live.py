@@ -118,7 +118,7 @@ def boucle_live():
     print(f"▶ Démarrage {PARAMS['symbole']} {PARAMS['intervalle']} à "
           f"{maintenant_paris():%H:%M:%S} Paris | alertes Telegram : proba >= {SEUIL_PROBA}%")
 
-
+    envoyer_telegram(f"✅ DAX live démarré {maintenant_paris():%d/%m %H:%M}")
 
     while True:
         tl = maintenant_paris()
