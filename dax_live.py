@@ -21,10 +21,11 @@ INTERVALLE_REFRESH_S = 30
 HEURE_DEBUT = 9          # 09:00 Paris
 HEURE_FIN   = 17.5       # 17:30 Paris
 SEUIL_PROBA = 90         # alerte si probabilité directionnelle >= 90 %
+AGE_MAX_MIN = 30         # pas d'alerte si la barre date de plus de 30 min
 FICHIER_ETAT = os.path.join(BASE_DIR, "etat", "etat_live.json")
 
 # --- Filtre jour / heure (heures de Paris, lundi=0 ... vendredi=4) -----------
-JOURS_AUTORISES   = {"LONG": {1, 2},      "SHORT": {2, 3, 4}}   # mar-mer | mer-jeu-ven
+JOURS_AUTORISES   = {"LONG": {1, 2},       "SHORT": {2, 3, 4}}   # mar-mer | mer-jeu-ven
 HEURES_FAVORABLES = {"LONG": {12, 13, 14}, "SHORT": {9, 14, 15}}
 HEURES_INTERDITES = {"LONG": {8},          "SHORT": set()}
 HEURES_STRICTES   = False   # True = bloquer aussi les signaux hors créneaux favorables
@@ -129,14 +130,25 @@ def construire_message(l, ts, pct, creneau="—"):
             f"Créneau : {creneau}")
 
 
+def barre_recente(ts):
+    """True si la barre date de moins de AGE_MAX_MIN minutes."""
+    t = ts.to_pydatetime()
+    if t.tzinfo is None:
+        from zoneinfo import ZoneInfo
+        t = t.replace(tzinfo=ZoneInfo("Europe/Paris"))
+    return (maintenant_paris() - t).total_seconds() <= AGE_MAX_MIN * 60
+
+
 def barres_a_alerter(d, etat):
-    """Barres du jour postérieures à la dernière barre déjà alertée."""
+    """Barres du jour, récentes, postérieures à la dernière barre alertée."""
     aujourdhui = maintenant_paris().date()
     derniere = etat.get("derniere_barre_alertee")
     for ts in d.index:
         if ts.date() != aujourdhui:
             continue
         if derniere and str(ts) <= derniere:   # ISO : l'ordre texte = l'ordre temps
+            continue
+        if not barre_recente(ts):
             continue
         yield ts
 
