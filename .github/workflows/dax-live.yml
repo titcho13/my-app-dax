@@ -4,12 +4,13 @@ on:
   workflow_dispatch:
   schedule:
     # Heures en UTC. HIVER (CET = UTC+1) : valeurs ci-dessous.
-    # ÉTÉ (CEST = UTC+2) : remplace 55 7 → 55 6 et 55 11 → 55 10.
-    - cron: "55 7 * * 1-5"    # matin : démarre vers 08:55 Paris
-    - cron: "55 11 * * 1-5"   # après-midi : démarre vers 12:55 Paris
+    # ÉTÉ (CEST = UTC+2) : retire 1 h à chaque cron (7→6, 8→7, 11→10).
+    - cron: "55 7 * * 1-5"    # matin : ~08:55 Paris
+    - cron: "15 8 * * 1-5"    # secours si le cron du matin saute : ~09:15 Paris
+    - cron: "30 11 * * 1-5"   # après-midi : ~12:30 Paris (attend la fin du matin)
 
 permissions:
-  contents: write              # nécessaire pour commiter etat/etat_live.json
+  contents: write
 
 concurrency:
   group: dax-live              # jamais deux jobs en même temps
@@ -18,7 +19,7 @@ concurrency:
 jobs:
   live:
     runs-on: ubuntu-24.04
-    timeout-minutes: 330
+    timeout-minutes: 345
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
@@ -38,9 +39,7 @@ jobs:
           python -c "import sys; sys.path.insert(0,'.'); import dax_core; print('dax_core OK')"
 
       - name: Boucle live
-        # Le job du matin est coupé après 4 h (≈ 12:55 Paris) ; celui de
-        # l'après-midi s'arrête seul à 17:30 grâce au script.
-        timeout-minutes: 240
+        timeout-minutes: 320   # un run du matin tient jusqu'à ~14:15 Paris
         continue-on-error: true
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
