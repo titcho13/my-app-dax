@@ -3,17 +3,16 @@ name: DAX live
 on:
   workflow_dispatch:
   schedule:
-    # Heures en UTC. HIVER (CET = UTC+1) : valeurs ci-dessous.
-    # ÉTÉ (CEST = UTC+2) : retire 1 h à chaque cron (7→6, 8→7, 11→10).
-    - cron: "55 7 * * 1-5"    # matin : ~08:55 Paris
-    - cron: "15 8 * * 1-5"    # secours si le cron du matin saute : ~09:15 Paris
-    - cron: "30 11 * * 1-5"   # après-midi : ~12:30 Paris (attend la fin du matin)
+    # Heures en UTC. HIVER (CET = UTC+1). ÉTÉ : retire 1 h à chaque cron.
+    - cron: "55 7 * * 1-5"    # ~08:55 Paris
+    - cron: "15 8 * * 1-5"    # secours ~09:15 Paris
 
 permissions:
   contents: write
+  actions: write               # nécessaire pour relancer le workflow
 
 concurrency:
-  group: dax-live              # jamais deux jobs en même temps
+  group: dax-live
   cancel-in-progress: false
 
 jobs:
@@ -39,7 +38,7 @@ jobs:
           python -c "import sys; sys.path.insert(0,'.'); import dax_core; print('dax_core OK')"
 
       - name: Boucle live
-        timeout-minutes: 320   # un run du matin tient jusqu'à ~14:15 Paris
+        timeout-minutes: 320
         continue-on-error: true
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
@@ -48,7 +47,7 @@ jobs:
         run: python dax_live.py
 
       - name: Sauver état
-        if: always()
+        if: ${{ !cancelled() }}
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -59,4 +58,15 @@ jobs:
               git pull --rebase origin main
               git push
             fi
+          fi
+
+      - name: Relancer pour la suite de la séance
+        if: ${{ !cancelled() }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          H=$(TZ=Europe/Paris date +%H%M)
+          D=$(TZ=Europe/Paris date +%u)
+          if [ "$D" -le 5 ] && [ "$H" -lt 1700 ]; then
+            gh workflow run dax-live.yml --ref main
           fi
