@@ -1,0 +1,27 @@
+name: signal-dax
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "55 6 * * 1-5"    # matin : 06:55 UTC (07:55 Paris en hiver)
+    - cron: "55 11 * * 1-5"   # après-midi : 11:55 UTC
+
+concurrency:
+  group: signal-dax
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 340
+    env:
+      TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      DUREE_MAX_MIN: "300"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install yfinance pandas requests
+      - run: python signal_dax.py
