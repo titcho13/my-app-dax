@@ -92,7 +92,6 @@ def cycle(deja_vus):
 
 
 def main():
-    telegram("✅ Test signal_dax depuis GitHub Actions")
     debut = time.time()
     df0 = calcul_signaux(charger())
     deja_vus = set(df0.dropna(subset=["direction"])["timestamp"])
