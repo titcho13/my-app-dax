@@ -24,4 +24,4 @@ jobs:
         with:
           python-version: "3.11"
       - run: pip install yfinance pandas requests
-           - run: python -u signal_dax.py
+      - run: python -u signal_dax.py
