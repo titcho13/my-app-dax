@@ -5,6 +5,7 @@
 # Prérequis dans le dépôt :
 #   - dax_core.py (même dossier) : CELLULES 1 à 11b, sans la CELLULE 12, avec
 #     en tête : EN_NOTEBOOK = False / def clear_output(*a, **k): pass
+#   - signal_dax.py (même dossier) : stratégie MA50 (régime + filtres jour/heure)
 #   - .github/workflows/dax-live.yml
 # Secrets GitHub : TELEGRAM_TOKEN, TELEGRAM_CHAT_ID
 # ============================================================================
@@ -157,6 +158,14 @@ def boucle_live():
     from dax_core import (PARAMS, charger_donnees, detecter_anomalies,
                           calibrer_et_appliquer)
 
+    # --- Stratégie MA50 (signal_dax.py) ---
+    import signal_dax
+    try:
+        deja_vus_ma50 = signal_dax.initialiser()
+    except Exception as e:
+        print(f"⚠ Init MA50 : {e}")
+        deja_vus_ma50 = set()
+
     etat = charger_etat()
     d = None
     derniere_barre = None
@@ -200,6 +209,13 @@ def boucle_live():
                         msg = construire_message(l, ts, pct, creneau)
                         print(f"💬 {msg}")
                         envoyer_telegram(msg)
+
+                # --- Stratégie MA50 : même fenêtre de marché ---
+                if fenetre_marche():
+                    try:
+                        signal_dax.cycle(deja_vus_ma50)
+                    except Exception as e:
+                        print(f"⚠ MA50 : {e}")
 
                 etat["derniere_barre_alertee"] = str(d.index[-1])
                 etat["jour_calib"] = jour_calib
