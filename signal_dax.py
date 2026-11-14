@@ -7,14 +7,17 @@ TICKER = "^GDAXI"
 INTERVALLE_MIN = 15
 NB_BOUGIES_RECENTES = 2   # examine les 2 dernières bougies clôturées (micro-coupures)
 DUREE_MAX_MIN = int(os.getenv("DUREE_MAX_MIN", "330"))
-TOKEN = os.environ["TELEGRAM_TOKEN"]
-CHAT_ID = os.environ["TELEGRAM_CHAT_ID"]
 
 
 def telegram(msg):
+    tok = os.environ.get("TELEGRAM_TOKEN", "")
+    chat = os.environ.get("TELEGRAM_CHAT_ID", "")
+    if not (tok and chat):
+        print("⚠ TELEGRAM_TOKEN / TELEGRAM_CHAT_ID absents.")
+        return
     r = requests.post(
-        f"https://api.telegram.org/bot{TOKEN}/sendMessage",
-        data={"chat_id": CHAT_ID, "text": msg},
+        f"https://api.telegram.org/bot{tok}/sendMessage",
+        data={"chat_id": chat, "text": msg},
         timeout=20,
     )
     if not r.ok:
@@ -90,21 +93,25 @@ def cycle(deja_vus):
             continue
         emoji = "🟢" if row["direction"] == "LONG" else "🔴"
         telegram(
-            f"⚠️ SIGNAL D'ENTRÉE DAX {emoji} {row['direction']}\n"
+            f"⚠️ SIGNAL MA50 DAX {emoji} {row['direction']}\n"
             f"Heure (UTC) : {ts:%Y-%m-%d %H:%M}\n"
             f"Niveau d'entrée : {row['close']:.2f} pts\n"
             f"ATR (14) : {row['atr']:.2f} pts\n"
             f"Régime : {row['regime'].replace('_', ' ').title()}"
         )
-        print("Alerte envoyée :", ts)
+        print("Alerte MA50 envoyée :", ts)
+
+
+def initialiser():
+    """Signaux passés à ignorer (on garde les 2 dernières bougies)."""
+    df0 = calcul_signaux(charger())
+    anciens = df0.iloc[:-NB_BOUGIES_RECENTES]
+    return set(anciens.dropna(subset=["direction"])["timestamp"])
 
 
 def main():
     debut = time.time()
-    df0 = calcul_signaux(charger())
-    # on ignore les signaux passés, mais pas ceux des dernières bougies
-    anciens = df0.iloc[:-NB_BOUGIES_RECENTES]
-    deja_vus = set(anciens.dropna(subset=["direction"])["timestamp"])
+    deja_vus = initialiser()
     print(f"Démarrage {datetime.datetime.utcnow():%H:%M} UTC, {len(deja_vus)} signaux passés ignorés")
     cycle(deja_vus)
 
