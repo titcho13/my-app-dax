@@ -1,0 +1,27 @@
+name: alerte-qualite
+
+on:
+  schedule:
+    - cron: "*/15 6-16 * * 1-5"   # toutes les 15 min, lun-ven (heures UTC)
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "Forcer l'envoi d'un message (test)"
+        type: boolean
+        default: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -q yfinance pandas numpy requests
+      - run: python alerte_qualite.py
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          FORCE: ${{ inputs.force }}
