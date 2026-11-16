@@ -2,13 +2,20 @@ name: alerte-qualite
 
 on:
   schedule:
-    - cron: "*/15 6-16 * * 1-5"   # toutes les 15 min, lun-ven (heures UTC)
+    - cron: "2,17,32,47 6-16 * * 1-5"   # 2 min après chaque clôture de bougie, lun-ven (UTC)
   workflow_dispatch:
     inputs:
       force:
         description: "Forcer l'envoi d'un message (test)"
         type: boolean
         default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: alerte-qualite
+  cancel-in-progress: false
 
 jobs:
   run:
@@ -25,3 +32,13 @@ jobs:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           FORCE: ${{ inputs.force }}
+      - name: Sauvegarder le dernier signal envoyé
+        run: |
+          if [ -n "$(git status --porcelain last_signal.txt)" ]; then
+            git config user.name "github-actions"
+            git config user.email "github-actions@users.noreply.github.com"
+            git add last_signal.txt
+            git commit -m "maj dernier signal"
+            git pull --rebase
+            git push
+          fi
