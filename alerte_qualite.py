@@ -6,8 +6,9 @@ TZ = "Europe/Paris"
 ST_PERIOD, ST_MULT = 14, 3.0
 MA_LEN, ATR_LEN, ADX_LEN = 200, 14, 14
 SLOPE_N, ATR_SLOPE_N, SLOPE_THR = 20, 20, 0.20
-MAX_AGE_MIN = 14      # n'alerte que si la bougie vient de clôturer (évite les doublons)
+MAX_AGE_MIN = 60      # un signal reste valable 60 min après la clôture de sa bougie
 MVT_MIN = 3.0         # mouvement minimal depuis l'ouverture du jour, en ATR
+STATE_FILE = "last_signal.txt"
 
 TOKEN   = os.environ["TELEGRAM_TOKEN"]
 CHAT_ID = os.environ["TELEGRAM_CHAT_ID"]
@@ -53,6 +54,13 @@ def adx_f(d, n):
     return wilder(100*(pdi-mdi).abs()/(pdi+mdi), n)
 
 
+def last_sent():
+    try:
+        return open(STATE_FILE).read().strip()
+    except FileNotFoundError:
+        return ""
+
+
 def telegram(text):
     r = requests.post(f"https://api.telegram.org/bot{TOKEN}/sendMessage",
                       data={"chat_id": CHAT_ID, "text": text}, timeout=20)
@@ -62,9 +70,7 @@ def telegram(text):
 def main():
     df = fetch_data()
     now = pd.Timestamp.now(tz=TZ)
-
-    # on ne garde que les bougies clôturées
-    df = df[df.index + pd.Timedelta(minutes=15) <= now]
+    df = df[df.index + pd.Timedelta(minutes=15) <= now]      # bougies clôturées
     if len(df) < MA_LEN + SLOPE_N + 5:
         print("Pas assez de données"); return
 
@@ -76,29 +82,31 @@ def main():
     ATR_SLOPE = (ATR - ATR.shift(ATR_SLOPE_N)) / ATR.shift(ATR_SLOPE_N)
     px = df["Close"]
 
-    # achats uniquement
     long_q = (px > MA) & (DIR == 1) & (SLOPE > SLOPE_THR) \
              & (ATR_SLOPE >= ATR_SLOPE.shift()) & (ADX > 20)
     dec = pd.Series(np.where(long_q, 1, 0), df.index)
 
-    # mouvement depuis l'ouverture du jour, en ATR
     day_open = df["Open"].groupby(df.index.date).transform("first")
     MVT = (px - day_open) / ATR
 
-    i = len(df) - 1
+    sent = last_sent()
+    cands = []
+    for i in range(len(df) - 3, len(df)):                    # 3 dernières bougies
+        ts = df.index[i]
+        age = (now - (ts + pd.Timedelta(minutes=15))).total_seconds() / 60
+        new = dec.iloc[i] == 1 and dec.iloc[i-1] != 1
+        mvt_i = float(MVT.iloc[i])
+        print(f"{ts:%d/%m %H:%M} | décision={dec.iloc[i]} | mvt={mvt_i:+.1f} ATR | âge={age:.0f} min"
+              f"{' | NOUVEAU' if new else ''}{' | déjà envoyé' if ts.isoformat() == sent else ''}")
+        if new and age <= MAX_AGE_MIN and mvt_i >= MVT_MIN and ts.isoformat() != sent:
+            cands.append(i)
+    if FORCE:
+        cands = [len(df) - 1]
+    if not cands:
+        return
+
+    i = cands[-1]
     ts = df.index[i]
-    age_min = (now - (ts + pd.Timedelta(minutes=15))).total_seconds() / 60
-    cur, prev = dec.iloc[i], dec.iloc[i-1]
-    mvt = float(MVT.iloc[i])
-    print(f"{ts:%d/%m %H:%M} | décision={cur} (préc.={prev}) | mvt ouverture={mvt:+.1f} ATR | âge={age_min:.0f} min")
-
-    new_signal = cur == 1 and prev != 1 and age_min <= MAX_AGE_MIN
-    if new_signal and mvt < MVT_MIN and not FORCE:
-        print(f"Signal ignoré : mouvement depuis l'ouverture {mvt:.1f} ATR < {MVT_MIN}")
-        return
-    if not (new_signal or FORCE):
-        return
-
     adx_v, atr_pts, prix = ADX.iloc[i], ATR.iloc[i], px.iloc[i]
     if adx_v < 20:   sl_m, tp_m, profil = 1.0, 1.5, "PRUDENT"
     elif adx_v < 25: sl_m, tp_m, profil = 1.0, 2.0, "STANDARD"
@@ -106,8 +114,7 @@ def main():
     else:            sl_m, tp_m, profil = 1.2, 4.0, "ACCÉLÉRATION"
     sl_pts, tp_pts = round(atr_pts*sl_m), round(atr_pts*tp_m)
 
-    titre = "🚀 ACHAT QUALITÉ" if cur == 1 else "TEST (aucun signal actif)"
-
+    titre = "🚀 ACHAT QUALITÉ" if dec.iloc[i] == 1 else "TEST (aucun signal actif)"
     msg = (
         f"{titre} - DAX 15 min\n"
         f"Bougie {ts:%d/%m %H:%M}\n\n"
@@ -115,13 +122,16 @@ def main():
         f"Stop Loss : {prix - sl_pts:.0f} (-{sl_pts} pts)\n"
         f"Take Profit : {prix + tp_pts:.0f} (+{tp_pts} pts)\n"
         f"Profil : {profil} | Ratio 1:{tp_m/sl_m:.1f}\n\n"
-        f"Mouvement depuis ouverture : {mvt:+.1f} ATR (seuil {MVT_MIN})\n"
+        f"Mouvement depuis ouverture : {float(MVT.iloc[i]):+.1f} ATR (seuil {MVT_MIN})\n"
         f"Pente MM200 : {SLOPE.iloc[i]:+.2f} ATR\n"
         f"Pente ATR : {ATR_SLOPE.iloc[i]*100:+.1f} %\n"
         f"ADX : {adx_v:.1f} | ATR : {atr_pts:.1f} pts"
     )
     telegram(msg)
     print("Message Telegram envoyé")
+    if not FORCE:
+        with open(STATE_FILE, "w") as f:
+            f.write(ts.isoformat())
 
 
 if __name__ == "__main__":
