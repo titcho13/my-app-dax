@@ -1,0 +1,27 @@
+name: Signaux DAX Telegram
+
+on:
+  schedule:
+    - cron: "50 7 * * 1-5"    # 08h50 Paris (heure d'hiver) : job du matin
+    - cron: "20 13 * * 1-5"   # 14h20 Paris (heure d'hiver) : job de l'après-midi
+  workflow_dispatch:
+
+concurrency:
+  group: signaux-dax-telegram
+  cancel-in-progress: true     # le job de l'après-midi prend le relais du matin
+
+jobs:
+  signaux:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -q yfinance pandas numpy requests
+      - run: python signaux_telegram.py
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          MIN_PROBA: "0"
