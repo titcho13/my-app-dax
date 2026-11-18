@@ -1,0 +1,31 @@
+name: Signaux Supertrend
+
+on:
+  schedule:
+    - cron: "0 7 * * 1-5"      # 07:00 UTC = 08:00 Paris (hiver) / 09:00 Paris (été)
+  workflow_dispatch:            # lancement manuel possible
+
+concurrency:
+  group: signaux-supertrend
+  cancel-in-progress: true
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350        # limite GitHub : 360 min
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Installer les dépendances
+        run: pip install yfinance pandas numpy requests
+
+      - name: Lancer la surveillance
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python signaux_supertrend.py
