@@ -2,7 +2,7 @@ import os, json, requests
 import pandas as pd, yfinance as yf, numpy as np
 
 TICKER, INTERVALLE_MIN = "^GDAXI", 15
-FENETRE_MIN = FENETRE_MIN = 60*24*5                      # on n'alerte que sur les signaux récents
+FENETRE_MIN = 45                   # on n'alerte que sur les signaux récents
 SENT_FILE = "sent_my_system.json"
 TOKEN = os.environ["TELEGRAM_TOKEN"]
 CHAT_ID = os.environ["TELEGRAM_CHAT_ID"]
