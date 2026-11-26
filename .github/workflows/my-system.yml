@@ -1,0 +1,43 @@
+name: my system
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "1,16,31,46 7-16 * * 2-5"   # mar→ven, toutes les 15 min (UTC), 1 min après la clôture
+
+concurrency:
+  group: my-system
+  cancel-in-progress: false
+
+jobs:
+  signaux:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - run: pip install yfinance pandas numpy requests
+
+      - name: Restaurer les signaux déjà envoyés
+        uses: actions/cache/restore@v4
+        with:
+          path: sent_my_system.json
+          key: my-system-sent-${{ github.run_id }}
+          restore-keys: my-system-sent-
+
+      - run: python signaux_my_system.py
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+
+      - name: Sauvegarder les signaux envoyés
+        uses: actions/cache/save@v4
+        if: always()
+        with:
+          path: sent_my_system.json
+          key: my-system-sent-${{ github.run_id }}
